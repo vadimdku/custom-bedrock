@@ -15,8 +15,8 @@
     },
     {
       "name": "apiKey",
-      "label": "Bedrock API key",
-      "description": "Short-term Bedrock API key used to call the bedrock-mantle OpenAI-compatible endpoint.",
+      "label": "Bedrock or OpenAI API key",
+      "description": "Short-term API key used to call the bedrock-mantle OpenAI-compatible endpoint.",
       "type": "PASSWORD",
       "mandatory": true
     },

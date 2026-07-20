@@ -46,7 +46,7 @@ class MyLLM(BaseLLM):
 
         self.api_key = configured_api_key
         if not self.api_key:
-            raise ValueError("No Bedrock API key found. Provide one in the Bedrock API key field.")
+            raise ValueError("No API key found. Provide one in the Bedrock or OpenAI API key field.")
 
     def get_max_parallelism(self) -> int:
         return self.max_parallelism_val
