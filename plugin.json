@@ -1,0 +1,13 @@
+{
+    "id": "custom-bedrock",
+    "version": "0.0.2",
+    "meta": {
+        "label": "Amazon Bedrock",
+        "description": "Amazon Bedrock LLM connection using the Converse API and Response API (Mantle)",
+        "author": "pierre.petrella vadim.gekhman",
+        "icon": "fas fa-cloud",
+        "tags": ["LLM", "AWS", "Bedrock"],
+        "licenseInfo": "Apache Software License"
+    },
+    "params": []
+}

@@ -1,0 +1,241 @@
+{
+  "meta": {
+    "label": "Amazon Bedrock via Converse API",
+    "description": "Text completion models powered by Amazon Bedrock. Note that prices vary per region. When applicable, this is the us-east-1 cost.",
+    "icon": "fas fa-cloud"
+  },
+  "params": [
+    {
+      "name": "s3Connection",
+      "label": "S3 connection",
+      "description": "The credentials of that connection will be used to connect to Bedrock",
+      "type": "CONNECTION",
+      "mandatory": false
+    },
+    {
+      "name": "region",
+      "label": "Region",
+      "description": "AWS region name",
+      "type": "STRING",
+      "defaultValue": "us-east-1",
+      "mandatory": false
+    },
+    {
+      "name": "inferenceProfile",
+      "label": "Inference profile",
+      "description": "Optional Bedrock cross-region inference profile (e.g. us, eu, apac). See the AWS documentation for which models and regions are supported.",
+      "type": "STRING",
+      "mandatory": false
+    },
+    {
+      "name": "maxParallelism",
+      "label": "Max parallelism",
+      "type": "INT",
+      "defaultValue": 8,
+      "mandatory": false
+    },
+    {
+      "name": "useGuardrail",
+      "label": "Bedrock Guardrail",
+      "description": "Use a Bedrock Guardrail created in this region. It will be applied to all enabled models in this connection.",
+      "type": "BOOLEAN",
+      "defaultValue": false,
+      "mandatory": false
+    },
+    {
+      "name": "guardrailIdentifier",
+      "label": "Guardrail Identifier",
+      "type": "STRING",
+      "mandatory": false,
+      "visibilityCondition": "model.useGuardrail"
+    },
+    {
+      "name": "guardrailVersion",
+      "label": "Guardrail Version",
+      "type": "STRING",
+      "defaultValue": "DRAFT",
+      "mandatory": false,
+      "visibilityCondition": "model.useGuardrail"
+    },
+    {
+      "name": "modelId",
+      "label": "Model",
+      "type": "SELECT",
+      "mandatory": true,
+      "selectChoices": [
+        {
+          "value": "__amazon__",
+          "label": "──── Amazon ────────────────────────────────────"
+        },
+        {
+          "value": "amazon.nova-pro-v1:0",
+          "label": "Amazon Nova Pro — Prompt: $0.0008/1k · Completion: $0.0032/1k"
+        },
+        {
+          "value": "amazon.nova-lite-v1:0",
+          "label": "Amazon Nova Lite — Prompt: $0.00006/1k · Completion: $0.00024/1k"
+        },
+        {
+          "value": "amazon.nova-micro-v1:0",
+          "label": "Amazon Nova Micro — Prompt: $0.000035/1k · Completion: $0.00014/1k"
+        },
+        {
+          "value": "amazon.titan-text-premier-v1:0",
+          "label": "Amazon Titan Text Premier [DEPRECATED Aug 15 2025] — Prompt: $0.0005/1k · Completion: $0.0015/1k"
+        },
+        {
+          "value": "amazon.titan-text-lite-v1",
+          "label": "Amazon Titan Text G1 Lite [DEPRECATED Aug 15 2025] — Prompt: $0.00015/1k · Completion: $0.0002/1k"
+        },
+        {
+          "value": "amazon.titan-text-express-v1",
+          "label": "Amazon Titan Text G1 Express [DEPRECATED Aug 15 2025] — Prompt: $0.0002/1k · Completion: $0.0006/1k"
+        },
+        {
+          "value": "amazon.titan-tg1-large",
+          "label": "Amazon Titan Large [DEPRECATED] — Prompt: $0.0013/1k · Completion: $0.0017/1k"
+        },
+        {
+          "value": "__anthropic__",
+          "label": "──── Anthropic ──────────────────────────────────"
+        },
+        {
+          "value": "anthropic.claude-sonnet-4-5-20251015-v1:0",
+          "label": "Anthropic Claude 4.5 Sonnet — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "anthropic.claude-haiku-4-5-20251001-v1:0",
+          "label": "Anthropic Claude 4.5 Haiku — Prompt: $0.001/1k · Completion: $0.005/1k"
+        },
+        {
+          "value": "anthropic.claude-opus-4-5-20251015-v1:0",
+          "label": "Anthropic Claude 4.5 Opus — Prompt: $0.005/1k · Completion: $0.025/1k"
+        },
+        {
+          "value": "anthropic.claude-opus-4-1-20250815-v1:0",
+          "label": "Anthropic Claude 4.1 Opus — Prompt: $0.015/1k · Completion: $0.075/1k"
+        },
+        {
+          "value": "anthropic.claude-sonnet-4-0-20250514-v1:0",
+          "label": "Anthropic Claude 4 Sonnet — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "anthropic.claude-opus-4-0-20250514-v1:0",
+          "label": "Anthropic Claude 4 Opus [DEPRECATED May 31 2026] — Prompt: $0.015/1k · Completion: $0.075/1k"
+        },
+        {
+          "value": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+          "label": "Anthropic Claude 3.7 Sonnet — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+          "label": "Anthropic Claude 3.5 Sonnet V2 Oct.24 [DEPRECATED Mar 1 2026] — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "label": "Anthropic Claude 3.5 Sonnet V1 Jun.24 [DEPRECATED Mar 1 2026] — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "anthropic.claude-3-5-haiku-20241022-v1:0",
+          "label": "Anthropic Claude 3.5 Haiku — Prompt: $0.0008/1k · Completion: $0.004/1k"
+        },
+        {
+          "value": "anthropic.claude-3-sonnet-20240229-v1:0",
+          "label": "Anthropic Claude 3 Sonnet [DEPRECATED Jul 21 2025] — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "anthropic.claude-3-haiku-20240307-v1:0",
+          "label": "Anthropic Claude 3 Haiku — Prompt: $0.00025/1k · Completion: $0.00125/1k"
+        },
+        {
+          "value": "anthropic.claude-3-opus-20240229-v1:0",
+          "label": "Anthropic Claude 3 Opus [DEPRECATED Jan 15 2026] — Prompt: $0.015/1k · Completion: $0.075/1k"
+        },
+        {
+          "value": "__ai21__",
+          "label": "──── AI21 Labs ──────────────────────────────────"
+        },
+        {
+          "value": "ai21.j2-ultra-v1",
+          "label": "AI21 Labs Jurassic-2 Ultra — Prompt/Completion: $0.0188/1k"
+        },
+        {
+          "value": "ai21.j2-mid-v1",
+          "label": "AI21 Labs Jurassic-2 Mid — Prompt/Completion: $0.0125/1k"
+        },
+        {
+          "value": "__cohere__",
+          "label": "──── Cohere ─────────────────────────────────────"
+        },
+        {
+          "value": "cohere.command-r-plus-v1:0",
+          "label": "Cohere Command R+ — Prompt: $0.003/1k · Completion: $0.015/1k"
+        },
+        {
+          "value": "cohere.command-r-v1:0",
+          "label": "Cohere Command R — Prompt: $0.0005/1k · Completion: $0.0015/1k"
+        },
+        {
+          "value": "__meta__",
+          "label": "──── Meta ───────────────────────────────────────"
+        },
+        {
+          "value": "meta.llama3-3-70b-instruct-v1:0",
+          "label": "Meta Llama 3.3 70B Instruct — Prompt: $0.00072/1k · Completion: $0.00072/1k"
+        },
+        {
+          "value": "meta.llama3-1-8b-instruct-v1:0",
+          "label": "Meta Llama 3.1 8B Instruct — Prompt: $0.00022/1k · Completion: $0.00022/1k"
+        },
+        {
+          "value": "meta.llama3-1-70b-instruct-v1:0",
+          "label": "Meta Llama 3.1 70B Instruct — Prompt: $0.00072/1k · Completion: $0.00072/1k"
+        },
+        {
+          "value": "meta.llama3-1-405b-instruct-v1:0",
+          "label": "Meta Llama 3.1 405B Instruct — Prompt: $0.00532/1k · Completion: $0.016/1k"
+        },
+        {
+          "value": "meta.llama3-8b-instruct-v1:0",
+          "label": "Meta Llama 3 8B Instruct — Prompt: $0.0003/1k · Completion: $0.0006/1k"
+        },
+        {
+          "value": "meta.llama3-70b-instruct-v1:0",
+          "label": "Meta Llama 3 70B Instruct — Prompt: $0.00265/1k · Completion: $0.0035/1k"
+        },
+        {
+          "value": "__mistral__",
+          "label": "──── Mistral ────────────────────────────────────"
+        },
+        {
+          "value": "mistral.mistral-7b-instruct-v0:2",
+          "label": "Mistral 7B Instruct — Pricing varies by region"
+        },
+        {
+          "value": "mistral.mixtral-8x7b-instruct-v0:1",
+          "label": "Mixtral 8x7B Instruct — Pricing varies by region"
+        },
+        {
+          "value": "mistral.mistral-small-2402-v1:0",
+          "label": "Mistral Small — Pricing varies by region"
+        },
+        {
+          "value": "mistral.mistral-large-2402-v1:0",
+          "label": "Mistral Large — Pricing varies by region"
+        },
+        {
+          "value": "mistral.mistral-large-2407-v1:0",
+          "label": "Mistral Large 2 — Prompt: $0.003/1k · Completion: $0.009/1k"
+        },
+        {
+          "value": "__deepseek__",
+          "label": "──── DeepSeek ───────────────────────────────────"
+        },
+        {
+          "value": "deepseek.r1-v1:0",
+          "label": "DeepSeek R1 — Prompt: $0.00135/1k · Completion: $0.0054/1k"
+        }
+      ]
+    }
+  ]
+}

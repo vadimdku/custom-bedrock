@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "label": "Amazon Bedrock via Mantle API",
+    "description": "OpenAI-compatible text completion models powered by Amazon Bedrock bedrock-mantle.",
+    "icon": "fas fa-cloud"
+  },
+  "params": [
+    {
+      "name": "region",
+      "label": "Region",
+      "description": "AWS region name for the bedrock-mantle endpoint",
+      "type": "STRING",
+      "defaultValue": "us-west-2",
+      "mandatory": true
+    },
+    {
+      "name": "apiKey",
+      "label": "Bedrock API key",
+      "description": "Short-term Bedrock API key used to call the bedrock-mantle OpenAI-compatible endpoint.",
+      "type": "PASSWORD",
+      "mandatory": true
+    },
+    {
+      "name": "maxParallelism",
+      "label": "Max parallelism",
+      "type": "INT",
+      "defaultValue": 8,
+      "mandatory": false
+    },
+    {
+      "name": "modelId",
+      "label": "Model",
+      "type": "SELECT",
+      "mandatory": true,
+      "selectChoices": [
+        {
+          "value": "openai.gpt-5.4",
+          "label": "OpenAI GPT-5.4 - Prompt: $2.75/1M - Completion: $16.50/1M"
+        },
+        {
+          "value": "nvidia.nemotron-super-3-120b",
+          "label": "NVIDIA Nemotron 3 Super 120B - Prompt: $0.18/1M - Completion: $0.78/1M"
+        },
+        {
+          "value": "nvidia.nemotron-nano-3-30b",
+          "label": "NVIDIA Nemotron Nano 3 30B - Prompt: $0.07/1M - Completion: $0.29/1M"
+        },
+        {
+          "value": "openai.gpt-oss-20b",
+          "label": "OpenAI GPT OSS 20B - Prompt: $0.08/1M - Completion: $0.36/1M"
+        },
+        {
+          "value": "openai.gpt-oss-120b",
+          "label": "OpenAI GPT OSS 120B - Prompt: $0.18/1M - Completion: $0.72/1M"
+        },
+        {
+          "value": "nvidia.nemotron-nano-12b-v2",
+          "label": "NVIDIA Nemotron Nano 12B v2 VL BF16 - Prompt: $0.24/1M - Completion: $0.72/1M"
+        },
+        {
+          "value": "nvidia.nemotron-nano-9b-v2",
+          "label": "NVIDIA Nemotron Nano 9B v2 - Prompt: $0.07/1M - Completion: $0.28/1M"
+        }
+      ]
+    }
+  ]
+}
