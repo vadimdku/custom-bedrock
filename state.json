@@ -9,11 +9,6 @@
       "ts": 1777399409525,
       "action": "UPGRADE",
       "user": "admin"
-    },
-    {
-      "ts": 1777416184069,
-      "action": "UPGRADE",
-      "user": "JCabell"
     }
   ],
   "gitState": {
