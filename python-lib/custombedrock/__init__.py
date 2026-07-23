@@ -61,11 +61,52 @@ def convert_messages(dku_messages: list) -> tuple:
                         bedrock_system.append({"text": block["text"]})
             continue
 
+        top_level_content = _convert_top_level_tool_content(msg)
+        if top_level_content:
+            bedrock_messages.append({"role": _bedrock_role(role), "content": top_level_content})
+            continue
+
         bedrock_content = _convert_content(content)
         if bedrock_content:
-            bedrock_messages.append({"role": role, "content": bedrock_content})
+            bedrock_messages.append({"role": _bedrock_role(role), "content": bedrock_content})
 
     return bedrock_messages, bedrock_system
+
+
+def _bedrock_role(role: str) -> str:
+    return "user" if role == "tool" else role
+
+
+def _convert_top_level_tool_content(msg: dict) -> list:
+    if msg.get("role") == "assistant" and msg.get("toolCalls"):
+        return [_convert_top_level_tool_call_bedrock(tool_call) for tool_call in msg["toolCalls"]]
+
+    if msg.get("role") == "tool" and msg.get("toolOutputs"):
+        return [_convert_top_level_tool_output_bedrock(tool_output) for tool_output in msg["toolOutputs"]]
+
+    return []
+
+
+def _convert_top_level_tool_call_bedrock(tool_call: dict) -> dict:
+    function = tool_call.get("function") or {}
+    return {
+        "toolUse": {
+            "toolUseId": tool_call.get("id", ""),
+            "name": function.get("name", ""),
+            "input": _parse_json_or_empty(function.get("arguments", "")),
+        }
+    }
+
+
+def _convert_top_level_tool_output_bedrock(tool_output: dict) -> dict:
+    output = tool_output.get("output", "")
+    content = [{"text": output if isinstance(output, str) else json.dumps(output)}]
+    return {
+        "toolResult": {
+            "toolUseId": tool_output.get("callId", ""),
+            "content": content,
+        }
+    }
 
 
 def _convert_content(content) -> list:
@@ -204,6 +245,11 @@ def convert_messages_openai(dku_messages: list) -> tuple:
             instructions_parts.extend(_extract_system_text(content))
             continue
 
+        extra_items = _convert_openai_top_level_tool_items(msg)
+        if extra_items:
+            input_items.extend(extra_items)
+            continue
+
         message_content, extra_items = _convert_openai_message_content(role, content)
         if message_content:
             input_items.append({
@@ -214,6 +260,37 @@ def convert_messages_openai(dku_messages: list) -> tuple:
 
     instructions = "\n\n".join(part for part in instructions_parts if part).strip()
     return input_items, (instructions or None)
+
+
+def _convert_openai_top_level_tool_items(msg: dict) -> list:
+    role = msg.get("role")
+
+    if role == "assistant" and msg.get("toolCalls"):
+        return [_convert_top_level_tool_call_openai(tool_call) for tool_call in msg["toolCalls"]]
+
+    if role == "tool" and msg.get("toolOutputs"):
+        return [_convert_top_level_tool_output_openai(tool_output) for tool_output in msg["toolOutputs"]]
+
+    return []
+
+
+def _convert_top_level_tool_call_openai(tool_call: dict) -> dict:
+    function = tool_call.get("function") or {}
+    return {
+        "type": "function_call",
+        "call_id": tool_call.get("id", ""),
+        "name": function.get("name", ""),
+        "arguments": function.get("arguments", ""),
+    }
+
+
+def _convert_top_level_tool_output_openai(tool_output: dict) -> dict:
+    output = tool_output.get("output", "")
+    return {
+        "type": "function_call_output",
+        "call_id": tool_output.get("callId", ""),
+        "output": output if isinstance(output, str) else json.dumps(output),
+    }
 
 
 def _extract_system_text(content) -> list:
@@ -285,6 +362,16 @@ def _convert_openai_message_content(role: str, content) -> tuple:
             })
 
     return message_content, extra_items
+
+
+def _parse_json_or_empty(raw: str) -> dict:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def convert_tools_openai(dku_tools: list) -> list:

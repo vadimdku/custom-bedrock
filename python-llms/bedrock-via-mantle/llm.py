@@ -447,6 +447,20 @@ def _convert_chat_message(msg: dict) -> dict:
     role = msg.get("role", "user")
     content = msg.get("content", "")
 
+    if role == "assistant" and msg.get("toolCalls"):
+        return {
+            "role": "assistant",
+            "content": content if isinstance(content, str) else "",
+            "tool_calls": [_convert_top_level_chat_tool_call(tc) for tc in msg["toolCalls"]],
+        }
+
+    if role == "tool" and msg.get("toolOutputs"):
+        return {
+            "role": "tool",
+            "tool_call_id": msg["toolOutputs"][0].get("callId", ""),
+            "content": _stringify_tool_output(msg["toolOutputs"][0].get("output", "")),
+        }
+
     if isinstance(content, str):
         return {"role": role, "content": content}
 
@@ -491,6 +505,18 @@ def _convert_chat_message(msg: dict) -> dict:
     if tool_calls:
         converted["tool_calls"] = tool_calls
     return converted
+
+
+def _convert_top_level_chat_tool_call(tool_call: dict) -> dict:
+    function = tool_call.get("function") or {}
+    return {
+        "id": tool_call.get("id", ""),
+        "type": "function",
+        "function": {
+            "name": function.get("name", ""),
+            "arguments": function.get("arguments", ""),
+        },
+    }
 
 
 def _stringify_tool_output(content) -> str:

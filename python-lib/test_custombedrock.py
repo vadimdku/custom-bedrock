@@ -11,6 +11,7 @@ import json
 
 from custombedrock import (
     convert_messages,
+    convert_messages_openai,
     convert_tools,
     extract_tool_calls,
     get_boto3_session,
@@ -113,6 +114,24 @@ _assert("toolResult" in block, "toolResult key present")
 _assert_eq(block["toolResult"]["toolUseId"], "call_1", "toolUseId in result")
 _assert_eq(block["toolResult"]["content"], [{"text": "Sunny, 22°C"}], "result text wrapped")
 
+_section("convert_messages — Dataiku top-level tool calls")
+
+msgs, _ = convert_messages([
+    {"role": "assistant", "toolCalls": [{
+        "type": "function",
+        "id": "call_1",
+        "function": {"name": "lookup", "arguments": "{\"part\":\"071\"}"},
+    }]},
+    {"role": "tool", "toolOutputs": [{
+        "callId": "call_1",
+        "output": "{\"planned_orders\": []}",
+    }]},
+])
+_assert_eq(msgs[0]["content"][0]["toolUse"]["toolUseId"], "call_1", "top-level tool call id")
+_assert_eq(msgs[0]["content"][0]["toolUse"]["input"], {"part": "071"}, "top-level tool args parsed")
+_assert_eq(msgs[1]["role"], "user", "tool output mapped to Bedrock user role")
+_assert_eq(msgs[1]["content"][0]["toolResult"]["toolUseId"], "call_1", "top-level output call id")
+
 _section("convert_messages — empty content skipped")
 
 msgs, _ = convert_messages([
@@ -132,6 +151,31 @@ msgs, sys_blocks = convert_messages(turns)
 _assert_eq(len(sys_blocks), 1,        "one system block")
 _assert_eq(len(msgs), 3,              "three non-system messages")
 _assert_eq(msgs[2]["content"][0]["text"], "Age?", "last user message correct")
+
+
+# ---------------------------------------------------------------------------
+# convert_messages_openai
+# ---------------------------------------------------------------------------
+
+_section("convert_messages_openai — Dataiku top-level tool history")
+
+items, instructions = convert_messages_openai([
+    {"role": "system", "content": "Be concise."},
+    {"role": "assistant", "toolCalls": [{
+        "type": "function",
+        "id": "call_1",
+        "function": {"name": "lookup", "arguments": "{\"part\":\"071\"}"},
+    }]},
+    {"role": "tool", "toolOutputs": [{
+        "callId": "call_1",
+        "output": "{\"planned_orders\": []}",
+    }]},
+])
+_assert_eq(instructions, "Be concise.", "system instructions extracted")
+_assert_eq(items[0]["type"], "function_call", "top-level tool call converted")
+_assert_eq(items[0]["call_id"], "call_1", "OpenAI call id")
+_assert_eq(items[1]["type"], "function_call_output", "top-level tool output converted")
+_assert_eq(items[1]["call_id"], "call_1", "OpenAI output call id")
 
 
 # ---------------------------------------------------------------------------
