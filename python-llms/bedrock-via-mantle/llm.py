@@ -475,10 +475,11 @@ def _reasoning_artifact(reasoning: str) -> dict:
     return {
         "id": "reasoning",
         "type": "REASONING",
+        "name": "Reasoning",
         "parts": [
             {
                 "index": 0,
-                "type": "TEXT",
+                "type": "REASONING",
                 "text": reasoning,
             }
         ],
