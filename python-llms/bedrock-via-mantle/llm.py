@@ -177,6 +177,7 @@ class MyLLM(BaseLLM):
         final_response = None
         response_tool_call_parts = {}
         reasoning_parts = []
+        reasoning_streamed = False
 
         for raw_line in resp:
             line = raw_line.decode("utf-8")
@@ -214,7 +215,11 @@ class MyLLM(BaseLLM):
                     yield {"chunk": {"text": delta}}
 
             elif event_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"}:
-                reasoning_parts.append(event.get("delta", ""))
+                delta = event.get("delta", "")
+                if delta:
+                    reasoning_parts.append(delta)
+                    yield {"chunk": {"artifacts": [_reasoning_artifact_delta(delta)]}}
+                    reasoning_streamed = True
 
             elif event_type in {"response.reasoning_text.done", "response.reasoning_summary_text.done"}:
                 text = event.get("text", "")
@@ -249,7 +254,7 @@ class MyLLM(BaseLLM):
 
         if tool_calls:
             yield {"chunk": {"toolCalls": _with_tool_call_indexes(tool_calls)}}
-        if reasoning:
+        if reasoning and not reasoning_streamed:
             yield {"chunk": {"artifacts": [_reasoning_artifact(reasoning)]}}
 
         yield {
@@ -296,6 +301,7 @@ class MyLLM(BaseLLM):
         completion_tokens = 0
         finish_reason = None
         reasoning_parts = []
+        reasoning_streamed = False
         tool_call_parts = {}
 
         for event in _iter_sse_events(resp):
@@ -313,6 +319,8 @@ class MyLLM(BaseLLM):
                 reasoning = _extract_chat_reasoning(delta)
                 if reasoning:
                     reasoning_parts.append(reasoning)
+                    yield {"chunk": {"artifacts": [_reasoning_artifact_delta(reasoning)]}}
+                    reasoning_streamed = True
                 content = delta.get("content")
                 if content:
                     yield {"chunk": {"text": content}}
@@ -348,7 +356,7 @@ class MyLLM(BaseLLM):
         if tool_calls:
             yield {"chunk": {"toolCalls": tool_calls}}
         reasoning = "".join(reasoning_parts)
-        if reasoning:
+        if reasoning and not reasoning_streamed:
             yield {"chunk": {"artifacts": [_reasoning_artifact(reasoning)]}}
 
         yield {
@@ -465,14 +473,20 @@ def _stringify_reasoning(reasoning) -> str:
 
 def _reasoning_artifact(reasoning: str) -> dict:
     return {
+        "id": "reasoning",
         "type": "REASONING",
         "parts": [
             {
+                "index": 0,
                 "type": "TEXT",
                 "text": reasoning,
             }
         ],
     }
+
+
+def _reasoning_artifact_delta(reasoning_delta: str) -> dict:
+    return _reasoning_artifact(reasoning_delta)
 
 
 def _add_reasoning_artifact(result: dict, reasoning: str) -> None:
