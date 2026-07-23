@@ -70,7 +70,7 @@ class MyLLM(BaseLLM):
         if settings.get("top_p") is not None:
             req["top_p"] = float(settings["top_p"])
 
-        tools = query.get("tools") or []
+        tools = _get_tools(query, settings)
         if tools:
             req["tools"] = convert_tools_openai(tools)
 
@@ -94,7 +94,7 @@ class MyLLM(BaseLLM):
         if settings.get("top_p") is not None:
             req["top_p"] = float(settings["top_p"])
 
-        tools = query.get("tools") or []
+        tools = _get_tools(query, settings)
         if tools:
             req["tools"] = _convert_chat_tools(tools)
 
@@ -316,6 +316,10 @@ def _iter_sse_events(resp):
 
     if data_lines:
         yield "\n".join(data_lines)
+
+
+def _get_tools(query: dict, settings: dict) -> list:
+    return query.get("tools") or settings.get("tools") or []
 
 
 def _convert_chat_message(msg: dict) -> dict:
