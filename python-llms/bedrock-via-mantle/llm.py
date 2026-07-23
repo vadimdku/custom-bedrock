@@ -160,6 +160,7 @@ class MyLLM(BaseLLM):
 
         data_lines = []
         final_response = None
+        response_tool_call_parts = {}
 
         for raw_line in resp:
             line = raw_line.decode("utf-8")
@@ -183,6 +184,9 @@ class MyLLM(BaseLLM):
             event = json.loads(payload)
             event_type = event.get("type", "")
 
+            if event_type == "error":
+                raise RuntimeError(f"Bedrock Mantle stream error: {event}")
+
             if event_type == "response.output_text.delta":
                 delta = event.get("delta", "")
                 if delta:
@@ -196,6 +200,17 @@ class MyLLM(BaseLLM):
             elif event_type == "response.completed":
                 final_response = event.get("response", {})
 
+            elif event_type in {"response.output_item.added", "response.output_item.done"}:
+                item = event.get("item") or {}
+                if item.get("type") == "function_call":
+                    _record_responses_tool_item(response_tool_call_parts, item, event)
+
+            elif event_type == "response.function_call_arguments.delta":
+                _record_responses_tool_arguments_delta(response_tool_call_parts, event)
+
+            elif event_type == "response.function_call_arguments.done":
+                _record_responses_tool_arguments_done(response_tool_call_parts, event)
+
         if data_lines and data_lines != ["[DONE]"]:
             event = json.loads("\n".join(data_lines))
             if event.get("type") == "response.completed":
@@ -205,13 +220,14 @@ class MyLLM(BaseLLM):
         usage = final_response.get("usage", {})
         prompt_tokens = usage.get("input_tokens", 0)
         completion_tokens = usage.get("output_tokens", 0)
+        tool_calls = extract_openai_tool_calls(final_response) or _build_responses_tool_calls(response_tool_call_parts)
 
         yield {
             "footer": {
                 "promptTokens": prompt_tokens,
                 "completionTokens": completion_tokens,
                 "estimatedCost": self._compute_cost(prompt_tokens, completion_tokens),
-                "toolCalls": extract_openai_tool_calls(final_response),
+                "toolCalls": tool_calls,
             }
         }
 
@@ -320,6 +336,70 @@ def _iter_sse_events(resp):
 
 def _get_tools(query: dict, settings: dict) -> list:
     return query.get("tools") or settings.get("tools") or []
+
+
+def _responses_tool_key(item_or_event: dict) -> str:
+    return str(
+        item_or_event.get("item_id")
+        or item_or_event.get("id")
+        or item_or_event.get("call_id")
+        or item_or_event.get("output_index")
+        or len(item_or_event)
+    )
+
+
+def _record_responses_tool_item(tool_call_parts: dict, item: dict, event: dict) -> None:
+    key = _responses_tool_key(item)
+    tool_call = tool_call_parts.setdefault(key, {
+        "id": "",
+        "name": "",
+        "arguments_parts": [],
+        "final_arguments": "",
+    })
+    tool_call["id"] = item.get("call_id") or item.get("id") or tool_call["id"]
+    tool_call["name"] = item.get("name") or tool_call["name"]
+    if item.get("arguments"):
+        tool_call["final_arguments"] = item["arguments"]
+
+
+def _record_responses_tool_arguments_delta(tool_call_parts: dict, event: dict) -> None:
+    key = _responses_tool_key(event)
+    tool_call = tool_call_parts.setdefault(key, {
+        "id": event.get("item_id", ""),
+        "name": "",
+        "arguments_parts": [],
+        "final_arguments": "",
+    })
+    tool_call["arguments_parts"].append(event.get("delta", ""))
+
+
+def _record_responses_tool_arguments_done(tool_call_parts: dict, event: dict) -> None:
+    key = _responses_tool_key(event)
+    tool_call = tool_call_parts.setdefault(key, {
+        "id": event.get("item_id", ""),
+        "name": "",
+        "arguments_parts": [],
+        "final_arguments": "",
+    })
+    tool_call["name"] = event.get("name") or tool_call["name"]
+    tool_call["final_arguments"] = event.get("arguments", "") or tool_call["final_arguments"]
+
+
+def _build_responses_tool_calls(tool_call_parts: dict) -> list:
+    tool_calls = []
+    for tool_call in tool_call_parts.values():
+        arguments = tool_call["final_arguments"] or "".join(tool_call["arguments_parts"])
+        if not tool_call["name"] and not arguments:
+            continue
+        tool_calls.append({
+            "type": "function",
+            "id": tool_call["id"],
+            "function": {
+                "name": tool_call["name"],
+                "arguments": arguments,
+            },
+        })
+    return tool_calls
 
 
 def _convert_chat_message(msg: dict) -> dict:
