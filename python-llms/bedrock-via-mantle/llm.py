@@ -73,6 +73,9 @@ class MyLLM(BaseLLM):
         tools = _get_tools(query, settings)
         if tools:
             req["tools"] = convert_tools_openai(tools)
+            tool_choice = _convert_tool_choice(settings.get("toolChoice"))
+            if tool_choice is not None:
+                req["tool_choice"] = tool_choice
 
         return req
 
@@ -97,6 +100,9 @@ class MyLLM(BaseLLM):
         tools = _get_tools(query, settings)
         if tools:
             req["tools"] = _convert_chat_tools(tools)
+            tool_choice = _convert_tool_choice(settings.get("toolChoice"))
+            if tool_choice is not None:
+                req["tool_choice"] = tool_choice
 
         return req
 
@@ -222,6 +228,9 @@ class MyLLM(BaseLLM):
         completion_tokens = usage.get("output_tokens", 0)
         tool_calls = extract_openai_tool_calls(final_response) or _build_responses_tool_calls(response_tool_call_parts)
 
+        if tool_calls:
+            yield {"chunk": {"toolCalls": _with_tool_call_indexes(tool_calls)}}
+
         yield {
             "footer": {
                 "promptTokens": prompt_tokens,
@@ -295,6 +304,7 @@ class MyLLM(BaseLLM):
             {
                 "type": "function",
                 "id": tc["id"],
+                "index": idx,
                 "function": {
                     "name": tc["name"],
                     "arguments": "".join(tc["arguments"]),
@@ -302,6 +312,9 @@ class MyLLM(BaseLLM):
             }
             for _, tc in sorted(tool_call_parts.items())
         ]
+
+        if tool_calls:
+            yield {"chunk": {"toolCalls": tool_calls}}
 
         yield {
             "footer": {
@@ -336,6 +349,24 @@ def _iter_sse_events(resp):
 
 def _get_tools(query: dict, settings: dict) -> list:
     return query.get("tools") or settings.get("tools") or []
+
+
+def _convert_tool_choice(tool_choice):
+    if not tool_choice:
+        return None
+
+    if isinstance(tool_choice, str):
+        return tool_choice
+
+    if not isinstance(tool_choice, dict):
+        return None
+
+    choice_type = tool_choice.get("type")
+    if choice_type in {"auto", "required", "none"}:
+        return choice_type
+    if choice_type == "tool_name" and tool_choice.get("name"):
+        return {"type": "function", "name": tool_choice["name"]}
+    return None
 
 
 def _responses_tool_key(item_or_event: dict) -> str:
@@ -394,12 +425,22 @@ def _build_responses_tool_calls(tool_call_parts: dict) -> list:
         tool_calls.append({
             "type": "function",
             "id": tool_call["id"],
+            "index": len(tool_calls),
             "function": {
                 "name": tool_call["name"],
                 "arguments": arguments,
             },
         })
     return tool_calls
+
+
+def _with_tool_call_indexes(tool_calls: list) -> list:
+    indexed = []
+    for idx, tool_call in enumerate(tool_calls):
+        item = dict(tool_call)
+        item.setdefault("index", idx)
+        indexed.append(item)
+    return indexed
 
 
 def _convert_chat_message(msg: dict) -> dict:
