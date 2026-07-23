@@ -415,6 +415,23 @@ def extract_openai_tool_calls(response: dict) -> list:
     return tool_calls
 
 
+def extract_openai_reasoning(response: dict) -> str:
+    parts = []
+    for item in response.get("output", []):
+        if item.get("type") != "reasoning":
+            continue
+
+        for content in item.get("content", []):
+            if content.get("type") == "reasoning_text":
+                parts.append(content.get("text", ""))
+
+        for summary in item.get("summary", []):
+            if summary.get("type") == "summary_text":
+                parts.append(summary.get("text", ""))
+
+    return "".join(parts)
+
+
 def extract_openai_text(response: dict) -> str:
     parts = []
     for item in response.get("output", []):

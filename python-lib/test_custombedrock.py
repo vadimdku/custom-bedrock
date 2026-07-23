@@ -13,6 +13,7 @@ from custombedrock import (
     convert_messages,
     convert_messages_openai,
     convert_tools,
+    extract_openai_reasoning,
     extract_tool_calls,
     get_boto3_session,
 )
@@ -176,6 +177,17 @@ _assert_eq(items[0]["type"], "function_call", "top-level tool call converted")
 _assert_eq(items[0]["call_id"], "call_1", "OpenAI call id")
 _assert_eq(items[1]["type"], "function_call_output", "top-level tool output converted")
 _assert_eq(items[1]["call_id"], "call_1", "OpenAI output call id")
+
+_section("extract_openai_reasoning — reasoning output item")
+
+reasoning = extract_openai_reasoning({
+    "output": [{
+        "type": "reasoning",
+        "content": [{"type": "reasoning_text", "text": "Checked constraints. "}],
+        "summary": [{"type": "summary_text", "text": "Solved directly."}],
+    }]
+})
+_assert_eq(reasoning, "Checked constraints. Solved directly.", "reasoning text and summary extracted")
 
 
 # ---------------------------------------------------------------------------

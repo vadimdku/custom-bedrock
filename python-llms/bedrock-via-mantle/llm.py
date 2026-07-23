@@ -5,6 +5,7 @@ from dataiku.llm.python import BaseLLM
 from custombedrock import (
     convert_messages_openai,
     convert_tools_openai,
+    extract_openai_reasoning,
     extract_openai_text,
     extract_openai_tool_calls,
 )
@@ -69,6 +70,8 @@ class MyLLM(BaseLLM):
             req["max_output_tokens"] = int(settings["max_tokens"])
         if settings.get("top_p") is not None:
             req["top_p"] = float(settings["top_p"])
+        if settings.get("reasoning") is not None:
+            req["reasoning"] = settings["reasoning"]
 
         tools = _get_tools(query, settings)
         if tools:
@@ -96,6 +99,8 @@ class MyLLM(BaseLLM):
             req[max_tokens_param] = int(settings["max_tokens"])
         if settings.get("top_p") is not None:
             req["top_p"] = float(settings["top_p"])
+        if settings.get("reasoning_effort") is not None:
+            req["reasoning_effort"] = settings["reasoning_effort"]
 
         tools = _get_tools(query, settings)
         if tools:
@@ -145,14 +150,18 @@ class MyLLM(BaseLLM):
         usage = response.get("usage", {})
         prompt_tokens = usage.get("input_tokens", 0)
         completion_tokens = usage.get("output_tokens", 0)
+        reasoning = extract_openai_reasoning(response)
 
-        return {
+        result = {
             "text": extract_openai_text(response),
             "promptTokens": prompt_tokens,
             "completionTokens": completion_tokens,
             "estimatedCost": self._compute_cost(prompt_tokens, completion_tokens),
             "toolCalls": extract_openai_tool_calls(response),
+            "finishReason": _responses_finish_reason(response),
         }
+        _add_reasoning_artifact(result, reasoning)
+        return result
 
     def process_stream(self, query, settings, trace):
         if not self.use_responses_api:
@@ -167,6 +176,7 @@ class MyLLM(BaseLLM):
         data_lines = []
         final_response = None
         response_tool_call_parts = {}
+        reasoning_parts = []
 
         for raw_line in resp:
             line = raw_line.decode("utf-8")
@@ -203,6 +213,14 @@ class MyLLM(BaseLLM):
                 if delta:
                     yield {"chunk": {"text": delta}}
 
+            elif event_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"}:
+                reasoning_parts.append(event.get("delta", ""))
+
+            elif event_type in {"response.reasoning_text.done", "response.reasoning_summary_text.done"}:
+                text = event.get("text", "")
+                if text:
+                    reasoning_parts = [text]
+
             elif event_type == "response.completed":
                 final_response = event.get("response", {})
 
@@ -227,12 +245,16 @@ class MyLLM(BaseLLM):
         prompt_tokens = usage.get("input_tokens", 0)
         completion_tokens = usage.get("output_tokens", 0)
         tool_calls = extract_openai_tool_calls(final_response) or _build_responses_tool_calls(response_tool_call_parts)
+        reasoning = extract_openai_reasoning(final_response) or "".join(reasoning_parts)
 
         if tool_calls:
             yield {"chunk": {"toolCalls": _with_tool_call_indexes(tool_calls)}}
+        if reasoning:
+            yield {"chunk": {"artifacts": [_reasoning_artifact(reasoning)]}}
 
         yield {
             "footer": {
+                "finishReason": _responses_finish_reason(final_response),
                 "promptTokens": prompt_tokens,
                 "completionTokens": completion_tokens,
                 "estimatedCost": self._compute_cost(prompt_tokens, completion_tokens),
@@ -250,14 +272,18 @@ class MyLLM(BaseLLM):
         usage = response.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
+        reasoning = _extract_chat_reasoning(message)
 
-        return {
+        result = {
             "text": message.get("content") or "",
             "promptTokens": prompt_tokens,
             "completionTokens": completion_tokens,
             "estimatedCost": self._compute_cost(prompt_tokens, completion_tokens),
             "toolCalls": _extract_chat_tool_calls(message),
+            "finishReason": _map_finish_reason(choice.get("finish_reason")),
         }
+        _add_reasoning_artifact(result, reasoning)
+        return result
 
     def _process_chat_stream(self, query, settings):
         req = self._build_chat_request(query, settings)
@@ -268,6 +294,8 @@ class MyLLM(BaseLLM):
 
         prompt_tokens = 0
         completion_tokens = 0
+        finish_reason = None
+        reasoning_parts = []
         tool_call_parts = {}
 
         for event in _iter_sse_events(resp):
@@ -280,7 +308,11 @@ class MyLLM(BaseLLM):
             completion_tokens = usage.get("completion_tokens", completion_tokens)
 
             for choice in data.get("choices") or []:
+                finish_reason = choice.get("finish_reason") or finish_reason
                 delta = choice.get("delta") or {}
+                reasoning = _extract_chat_reasoning(delta)
+                if reasoning:
+                    reasoning_parts.append(reasoning)
                 content = delta.get("content")
                 if content:
                     yield {"chunk": {"text": content}}
@@ -315,9 +347,13 @@ class MyLLM(BaseLLM):
 
         if tool_calls:
             yield {"chunk": {"toolCalls": tool_calls}}
+        reasoning = "".join(reasoning_parts)
+        if reasoning:
+            yield {"chunk": {"artifacts": [_reasoning_artifact(reasoning)]}}
 
         yield {
             "footer": {
+                "finishReason": _map_finish_reason(finish_reason),
                 "promptTokens": prompt_tokens,
                 "completionTokens": completion_tokens,
                 "estimatedCost": self._compute_cost(prompt_tokens, completion_tokens),
@@ -367,6 +403,81 @@ def _convert_tool_choice(tool_choice):
     if choice_type == "tool_name" and tool_choice.get("name"):
         return {"type": "function", "name": tool_choice["name"]}
     return None
+
+
+def _responses_finish_reason(response: dict) -> str:
+    status = response.get("status")
+    if status == "completed":
+        return "STOP"
+
+    incomplete_reason = (response.get("incomplete_details") or {}).get("reason")
+    if incomplete_reason:
+        return _map_finish_reason(incomplete_reason)
+
+    if response.get("error"):
+        return "ERROR"
+
+    return _map_finish_reason(status)
+
+
+def _map_finish_reason(finish_reason) -> str:
+    mapping = {
+        "stop": "STOP",
+        "completed": "STOP",
+        "end_turn": "STOP",
+        "length": "LENGTH",
+        "max_tokens": "LENGTH",
+        "max_output_tokens": "LENGTH",
+        "tool_calls": "TOOL_CALLS",
+        "function_call": "TOOL_CALLS",
+        "content_filter": "CONTENT_FILTER",
+        "error": "ERROR",
+        None: "UNKNOWN",
+    }
+    return mapping.get(finish_reason, str(finish_reason or "UNKNOWN").upper())
+
+
+def _extract_chat_reasoning(message: dict) -> str:
+    for key in ("reasoning_content", "reasoning"):
+        reasoning = message.get(key)
+        if reasoning:
+            return _stringify_reasoning(reasoning)
+    return ""
+
+
+def _stringify_reasoning(reasoning) -> str:
+    if isinstance(reasoning, str):
+        return reasoning
+    if isinstance(reasoning, list):
+        parts = []
+        for item in reasoning:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                parts.append(item.get("text", ""))
+        return "".join(parts)
+    if isinstance(reasoning, dict):
+        if reasoning.get("text"):
+            return reasoning["text"]
+        return json.dumps(reasoning)
+    return str(reasoning)
+
+
+def _reasoning_artifact(reasoning: str) -> dict:
+    return {
+        "type": "REASONING",
+        "parts": [
+            {
+                "type": "TEXT",
+                "text": reasoning,
+            }
+        ],
+    }
+
+
+def _add_reasoning_artifact(result: dict, reasoning: str) -> None:
+    if reasoning:
+        result["artifacts"] = [_reasoning_artifact(reasoning)]
 
 
 def _responses_tool_key(item_or_event: dict) -> str:

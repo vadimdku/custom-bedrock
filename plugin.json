@@ -1,6 +1,6 @@
 {
     "id": "custom-bedrock",
-    "version": "0.0.4",
+    "version": "0.0.6",
     "meta": {
         "label": "Amazon Bedrock",
         "description": "Amazon Bedrock LLM connection using the Converse API and Response API (Mantle)",
